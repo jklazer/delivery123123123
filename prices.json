@@ -1,0 +1,168 @@
+{
+  "delivery": {
+    "up_to_1m3": 3500,
+    "1_to_5m3": 6000,
+    "5_to_10m3": 10400,
+    "10_to_18m3": 12700
+  },
+  "moscow_ring_road_km": 75,
+  "carrying_from_parking": 900,
+  "lifting": {
+    "sofa_non_disassembled_up_to_2m": {
+      "places_count": 1,
+      "price_per_place": 800,
+      "hint": "Неразборный диван (1 место)",
+      "always_disassembled": false
+    },
+    "sofa_non_disassembled_up_to_3m": {
+      "places_count": 1,
+      "price_per_place": 1500,
+      "hint": "Неразборный диван (1 место)",
+      "always_disassembled": false
+    },
+    "sofa_corner": {
+      "places_count": 1,
+      "price_per_place": 1500,
+      "hint": "Угловой диван (1 место)",
+      "always_disassembled": false
+    },
+    "sofa_disassembled_1_seat": {
+      "places_count": 1,
+      "price_per_place": 500,
+      "hint": "Разборный диван (1 место)",
+      "always_disassembled": true
+    },
+    "armchair": {
+      "places_count": 1,
+      "price_per_place": 500
+    },
+    "chair_semi_armchair_pouf_coffee_table": {
+      "places_count": 1,
+      "price_per_place": 350
+    },
+    "decor_light": {
+      "places_count": 1,
+      "price_per_place": 300
+    },
+    "ottoman_bedside_table_bench": {
+      "places_count": 1,
+      "price_per_place": 500
+    },
+    "shelf_up_to_1m": {
+      "places_count": 1,
+      "price_per_place": 500,
+      "hint": "Стеллаж всегда разобран",
+      "always_disassembled": true
+    },
+    "shelf_up_to_2m": {
+      "places_count": 1,
+      "price_per_place": 1000,
+      "hint": "Стеллаж всегда разобран",
+      "always_disassembled": true
+    },
+    "chest_tv_stand_up_to_60kg": {
+      "places_count": 1,
+      "price_per_place": 700
+    },
+    "chest_tv_stand_up_to_90kg": {
+      "places_count": 1,
+      "price_per_place": 1500
+    },
+    "chest_tv_stand_up_to_120kg": {
+      "places_count": 1,
+      "price_per_place": 2000
+    },
+    "chest_tv_stand_up_to_150kg": {
+      "places_count": 1,
+      "price_per_place": 2500
+    },
+    "mirror_picture_up_to_1m": {
+      "places_count": 1,
+      "price_per_place": 350
+    },
+    "mirror_picture_over_1m": {
+      "places_count": 1,
+      "price_per_place": 500
+    },
+    "desk_console": {
+      "places_count": 1,
+      "price_per_place": 500
+    },
+    "dining_table": {
+      "places_count": 1,
+      "price_per_place": 800
+    },
+    "dining_table_marble_up_to_60kg": {
+      "places_count": 1,
+      "price_per_place": 700
+    },
+    "dining_table_marble_up_to_90kg": {
+      "places_count": 1,
+      "price_per_place": 1500
+    },
+    "dining_table_marble_up_to_120kg": {
+      "places_count": 1,
+      "price_per_place": 2000
+    },
+    "dining_table_marble_up_to_150kg": {
+      "places_count": 1,
+      "price_per_place": 2500
+    },
+    "dining_table_marble_up_to_200kg": {
+      "places_count": 1,
+      "price_per_place": 3000
+    },
+    "bed_disassembled_1_seat": {
+      "places_count": 3,
+      "price_per_place": 500,
+      "hint": "Обычно 3 места (изголовье + 2 коробки)",
+      "always_disassembled": true
+    },
+    "bed_non_disassembled": {
+      "places_count": 1,
+      "price_per_place": 1500,
+      "hint": "Неразборная кровать (1 место)",
+      "always_disassembled": false
+    }
+  },
+  "assembly": {
+    "sofa_straight": 1800,
+    "sofa_corner": 3800,
+    "bed": 4500,
+    "shelf_up_to_1m": 800,
+    "shelf_up_to_2m": 1600,
+    "tv_stand_chest": 1600,
+    "table_console_desk_floor_lamp": 800,
+    "bench_armchair_chair": 800,
+    "dining_table": 1800,
+    "coffee_table_marble": 1800,
+    "dining_table_marble": 4500,
+    "mirror_picture_up_to_1m": 2000,
+    "mirror_picture_over_1m": 3000,
+    "cabinet_sideboard_percent": 7,
+    "cabinet_furniture_percent": 7
+  },
+  "waiting_time": {
+    "free_minutes": 15,
+    "15_to_30_min": 2000,
+    "30_min_to_1_hour": 4000
+  },
+  "additional_address": {
+    "up_to_1m3": 1600,
+    "1_to_5m3": 2700
+  },
+  "assembly_departure": {
+    "base": 4500,
+    "mkad_km": 70
+  },
+  "storage": {
+    "per_day_per_m3": 350
+  },
+  "packaging": {
+    "bubble_wrap_per_meter": 150
+  },
+  "hourly_rate": {
+    "per_person_per_hour": 1200
+  },
+  "partner_discount": 30
+}

@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Логи
+*.log
+bot.log
+
+# Временные файлы
+*.tmp
+*.bak
+*.swp
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Документы (не нужны на сервере)
+*.docx
+*.md
+!README.md
+*.txt
+!requirements.txt
+!FILES_TO_UPLOAD.txt
+
+# Скрипты для разработки (не нужны на сервере)
+check_*.py
+test_*.py
+monitor_*.py
+prepare_*.py
+update_*.py
+restart_*.py
+run_*.py
+final_*.py
+deploy_*.py
+deploy_*.ps1
+deploy_*.sh
+
+# PowerShell скрипты
+*.ps1
+
+# Shell скрипты
+*.sh
+
+# Но оставляем необходимые файлы
+!bot.py
+!app.py
+!amvera.yml
+!requirements.txt
+!prices.json
