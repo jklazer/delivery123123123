@@ -270,19 +270,31 @@ def can_access_admin_features(update: Update) -> bool:
 
 class DeliveryCalculator:
     """Класс для расчёта стоимости доставки"""
-    
-    def __init__(self):
+
+    # Кеш для прайс-листа: избегаем HTTP-запрос к Google на каждом шаге диалога
+    _cached_prices: Dict[str, Any] = {}
+    _cache_timestamp: float = 0
+    _CACHE_TTL: float = 300  # 5 минут
+
+    def __init__(self, force_reload: bool = False):
         """
-        Автоматически загружает актуальный прайс-лист из Google Docs.
-        
-        При каждом создании экземпляра калькулятора данные загружаются заново,
-        что гарантирует использование самых свежих цен.
-        
-        ОЖИДАНИЕ: содержимое документа — валидный JSON с тем же форматом,
-        который раньше был в файле prices.json.
+        Загружает прайс-лист из Google Sheets с кешированием.
+
+        Данные кешируются на 5 минут, чтобы не делать HTTP-запрос
+        на каждом шаге диалога. При ручном обновлении (force_reload=True)
+        кеш сбрасывается.
         """
+        import time as _time
         self.prices: Dict[str, Any] = {}
+
+        now = _time.time()
+        if not force_reload and DeliveryCalculator._cached_prices and (now - DeliveryCalculator._cache_timestamp) < DeliveryCalculator._CACHE_TTL:
+            self.prices = DeliveryCalculator._cached_prices
+            return
+
         self._load_prices_from_google_doc()
+        DeliveryCalculator._cached_prices = self.prices
+        DeliveryCalculator._cache_timestamp = now
 
     def _build_export_url(self) -> str:
         """
@@ -375,7 +387,7 @@ class DeliveryCalculator:
                 # Это нужно, если Google Sheets удалил кавычки при вставке
                 logger.warning(f"Первая попытка парсинга не удалась: {first_error}")
                 logger.info("Пробуем добавить кавычки вокруг ключей...")
-                
+
                 import re
                 # Добавляем кавычки вокруг ключей (слова перед двоеточием)
                 # Паттерн: ключ: значение -> "ключ": значение
@@ -384,7 +396,7 @@ class DeliveryCalculator:
                 fixed_json = re.sub(r':\s*"(\d+)"', r': \1', fixed_json)
                 fixed_json = re.sub(r':\s*"(true|false)"', r': \1', fixed_json)
                 fixed_json = re.sub(r':\s*"(null)"', r': \1', fixed_json)
-                
+
                 try:
                     self.prices = json.loads(fixed_json)
                     logger.info("✅ JSON успешно распарсен после добавления кавычек")
@@ -395,27 +407,21 @@ class DeliveryCalculator:
                         f"Ошибка парсинга JSON из Google Sheets: {second_error.msg}. "
                         "Убедитесь, что JSON правильно разбит по строкам в колонке A."
                     )
-                logger.info(f"✅ Прайс-лист успешно загружен из Google Sheets")
-                logger.info(f"Загружено ключей: {len(self.prices)}")
-                
-                # Логируем все ключевые цены для проверки
-                if 'moscow_ring_road_km' in self.prices:
-                    logger.info(f"✅ Цена за МКАД: {self.prices['moscow_ring_road_km']} руб/км")
-                if 'carrying_from_parking' in self.prices:
-                    logger.info(f"✅ Пронос от парковки: {self.prices['carrying_from_parking']} руб")
-                if 'delivery' in self.prices:
-                    delivery = self.prices['delivery']
-                    logger.info(f"✅ Доставка: до 1м³={delivery.get('up_to_1m3')}, 1-5м³={delivery.get('1_to_5m3')}, 5-10м³={delivery.get('5_to_10m3')}, 10-18м³={delivery.get('10_to_18m3')}")
-                if 'lifting' in self.prices:
-                    lifting = self.prices['lifting']
-                    logger.info(f"✅ Подъем (примеры): диван до 2м={lifting.get('sofa_non_disassembled_up_to_2m', {}).get('price_per_place', 'N/A')}, кресло={lifting.get('armchair', {}).get('price_per_place', 'N/A')}")
-            except json.JSONDecodeError as json_err:
-                logger.error(f"❌ Ошибка парсинга JSON из Google Sheets: {json_err}")
-                logger.error(f"Проблемный JSON (первые 500 символов): {json_text[:500]}")
-                raise ValueError(
-                    f"Ошибка парсинга JSON из Google Sheets: {json_err.msg}. "
-                    "Убедитесь, что JSON правильно разбит по строкам в колонке A."
-                )
+
+            # Логируем загруженные цены для проверки
+            logger.info(f"✅ Прайс-лист успешно загружен из Google Sheets")
+            logger.info(f"Загружено ключей: {len(self.prices)}")
+
+            if 'moscow_ring_road_km' in self.prices:
+                logger.info(f"✅ Цена за МКАД: {self.prices['moscow_ring_road_km']} руб/км")
+            if 'carrying_from_parking' in self.prices:
+                logger.info(f"✅ Пронос от парковки: {self.prices['carrying_from_parking']} руб")
+            if 'delivery' in self.prices:
+                delivery = self.prices['delivery']
+                logger.info(f"✅ Доставка: до 1м³={delivery.get('up_to_1m3')}, 1-5м³={delivery.get('1_to_5m3')}, 5-10м³={delivery.get('5_to_10m3')}, 10-18м³={delivery.get('10_to_18m3')}")
+            if 'lifting' in self.prices:
+                lifting = self.prices['lifting']
+                logger.info(f"✅ Подъем (примеры): диван до 2м={lifting.get('sofa_non_disassembled_up_to_2m', {}).get('price_per_place', 'N/A')}, кресло={lifting.get('armchair', {}).get('price_per_place', 'N/A')}")
     
     def _try_load_from_google_doc(self) -> None:
         """Пробует загрузить данные из Google Docs (ожидается чистый JSON)"""
@@ -484,9 +490,8 @@ class DeliveryCalculator:
                 brace_count = 0
                 
                 for line in lines:
-                    if '{' in line:
+                    if not in_json and '{' in line:
                         in_json = True
-                        brace_count += line.count('{') - line.count('}')
                     if in_json:
                         json_lines.append(line)
                         brace_count += line.count('{') - line.count('}')
@@ -611,7 +616,13 @@ class DeliveryCalculator:
             'sofa_corner': 'Диван угловой',
             'sofa_disassembled_1_seat': 'Диван разборный',
             'bed_disassembled_1_seat': 'Кровать разборная',
+            'bed_non_disassembled': 'Кровать неразборная',
             'dining_table': 'Стол обеденный',
+            'dining_table_marble_up_to_60kg': 'Стол обеденный мрамор до 60кг',
+            'dining_table_marble_up_to_90kg': 'Стол обеденный мрамор до 90кг',
+            'dining_table_marble_up_to_120kg': 'Стол обеденный мрамор до 120кг',
+            'dining_table_marble_up_to_150kg': 'Стол обеденный мрамор до 150кг',
+            'dining_table_marble_up_to_200kg': 'Стол обеденный мрамор до 200кг',
             'desk_console': 'Стол письменный/Консоль',
             'shelf_up_to_1m': 'Стеллаж до 1м',
             'shelf_up_to_2m': 'Стеллаж до 2м',
@@ -683,6 +694,7 @@ class DeliveryCalculator:
                 'sofa_corner': ('sofa_corner', 'Дивана углового'),
                 'sofa_disassembled_1_seat': ('sofa_straight', 'Дивана прямого'),
                 'bed_disassembled_1_seat': ('bed', 'Кровати'),
+                'bed_non_disassembled': ('bed', 'Кровати'),
                 'shelf_up_to_1m': ('shelf_up_to_1m', 'Стеллажа до 1м'),
                 'shelf_up_to_2m': ('shelf_up_to_2m', 'Стеллажа до 2м'),
                 'chest_tv_stand_up_to_60kg': ('tv_stand_chest', 'Комода/ТВ-тумбы'),
@@ -842,17 +854,15 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     - Расчет хранения
     - Просмотр прайса
     """
+    user_id = update.effective_user.id if update.effective_user else "unknown"
     try:
-        user_id = update.effective_user.id if update.effective_user else "unknown"
         logger.info(f"Показываем главное меню пользователю {user_id}")
-        
+
         # Очищаем все данные пользователя для нового расчёта
         context.user_data.clear()
         calculation_data = get_calculation_data(context)
         calculation_data.clear()
         calculation_data['furniture_list'] = []
-        
-        user_id = update.effective_user.id if update.effective_user else None
         
         keyboard = [
             [InlineKeyboardButton("🚚 Расчёт доставки (Москва или МО)", callback_data="menu_delivery")],
@@ -1676,7 +1686,7 @@ async def delivery_only_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 async def ask_moscow_floor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Запрос этажа для Москвы (общий для всей мебели)"""
-    text = "🏢 Введите номер этажа квартиры (только число):\n\n(Этот этаж будет использован для всей мебели)"
+    text = "🏢 Введите номер этажа квартиры (число):\n\n(0 или отрицательное = цокольный/подвал)\n(Этот этаж будет использован для всей мебели)"
     if update.callback_query:
         await update.callback_query.message.reply_text(text)
     else:
@@ -1689,18 +1699,21 @@ async def moscow_floor_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обработка ввода этажа для Москвы"""
     try:
         floor = int(update.message.text)
-        if floor < 1:
-            await update.message.reply_text("❌ Этаж должен быть не менее 1. Введите число:")
+        if floor < -5:
+            await update.message.reply_text("❌ Этаж слишком низкий (минимум -5). Введите число:")
             return MOSCOW_FLOOR
         if floor > 200:
             await update.message.reply_text("❌ Этаж слишком большой (максимум 200). Введите число:")
             return MOSCOW_FLOOR
-        
+
         calculation_data = get_calculation_data(context)
         calculation_data['default_floor'] = floor
         calculation_data['default_elevator'] = None  # Пока не задан
-        
-        await update.message.reply_text(f"✅ Этаж квартиры: {floor}\n(Будет использован для всей мебели)")
+
+        if floor <= 0:
+            await update.message.reply_text(f"✅ Этаж: цокольный/подвал (будет рассчитан по тарифу 2-го этажа)\n(Будет использован для всей мебели)")
+        else:
+            await update.message.reply_text(f"✅ Этаж квартиры: {floor}\n(Будет использован для всей мебели)")
         return await ask_moscow_elevator(update, context)
     except ValueError:
         await update.message.reply_text("❌ Пожалуйста, введите число:")
@@ -1860,7 +1873,7 @@ async def lifting_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def ask_floor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Запрос этажа"""
-    text = "🏢 Введите номер этажа (только число):"
+    text = "🏢 Введите номер этажа (число, 0 или отрицательное = цокольный/подвал):"
     if update.callback_query:
         await update.callback_query.message.reply_text(text)
     else:
@@ -1873,18 +1886,21 @@ async def floor_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Обработка ввода этажа"""
     try:
         floor = int(update.message.text)
-        if floor < 1:
-            await update.message.reply_text("❌ Этаж должен быть не менее 1. Введите число:")
+        if floor < -5:
+            await update.message.reply_text("❌ Этаж слишком низкий (минимум -5). Введите число:")
             return FLOOR
         if floor > 200:
             await update.message.reply_text("❌ Этаж слишком большой (максимум 200). Введите число:")
             return FLOOR
-        
+
         current_furniture = context.user_data.get('current_furniture', {})
         current_furniture['floor'] = floor
         context.user_data['current_furniture'] = current_furniture
-        
-        await update.message.reply_text(f"✅ Этаж: {floor}")
+
+        if floor <= 0:
+            await update.message.reply_text(f"✅ Этаж: цокольный/подвал (по тарифу 2-го этажа)")
+        else:
+            await update.message.reply_text(f"✅ Этаж: {floor}")
         return await ask_elevator(update, context)
     except ValueError:
         await update.message.reply_text("❌ Пожалуйста, введите число:")
@@ -2182,7 +2198,8 @@ async def furniture_type_callback(update: Update, context: ContextTypes.DEFAULT_
             ("Диван разборный (1 место)", "sofa_disassembled_1_seat")
         ],
         "furniture_category_bed": [
-            ("Кровать разборная", "bed_disassembled_1_seat")
+            ("Кровать разборная", "bed_disassembled_1_seat"),
+            ("Кровать неразборная", "bed_non_disassembled")
         ],
         "furniture_category_table": [
             ("Стол обеденный", "dining_table"),
@@ -2800,7 +2817,7 @@ async def update_prices_command(update: Update, context: ContextTypes.DEFAULT_TY
         return
     
     try:
-        DeliveryCalculator()
+        DeliveryCalculator(force_reload=True)
         context.application.bot_data['prices_last_update'] = datetime.now()
         await update.message.reply_text(
             "✅ Тарифы успешно обновлены из Google Sheets.\n"
@@ -2860,7 +2877,7 @@ async def update_prices_from_menu(update: Update, context: ContextTypes.DEFAULT_
         await query.message.reply_text("🔄 Обновляю данные из Google Sheets...")
         
         # Загружаем НОВЫЕ данные из Google Sheets
-        new_calculator = DeliveryCalculator()
+        new_calculator = DeliveryCalculator(force_reload=True)
         new_prices = new_calculator.prices.copy()
         context.application.bot_data['prices_last_update'] = datetime.now()
         
@@ -2905,7 +2922,7 @@ async def update_prices_callback(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     try:
         await query.answer("🔄 Загружаю данные из Google Docs...")
-        DeliveryCalculator()
+        DeliveryCalculator(force_reload=True)
         context.application.bot_data['prices_last_update'] = datetime.now()
         await query.message.reply_text(
             "✅ <b>Тарифы обновлены из Google Docs</b>\n\n"
@@ -2934,9 +2951,9 @@ async def update_prices_start_callback(update: Update, context: ContextTypes.DEF
     
     try:
         # Пробуем загрузить данные из Google Docs
-        calculator = DeliveryCalculator()
+        calculator = DeliveryCalculator(force_reload=True)
         context.application.bot_data['prices_last_update'] = datetime.now()
-        
+
         # Показываем успешное сообщение
         await query.message.reply_text(
             "✅ <b>Тарифы успешно обновлены из Google Docs</b>\n\n"
