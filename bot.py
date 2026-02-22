@@ -724,16 +724,6 @@ class DeliveryCalculator:
                             assembly_cost = self.prices['assembly'][assembly_key]
                             total += assembly_cost
                             details.append(f"Сборка {assembly_name.lower()}: {format_currency(assembly_cost)} руб")
-                    
-                    # Сборка по процентам (шкаф-сервант, корпусная мебель)
-                    if furniture_item.get('furniture_cost') and furniture_item.get('furniture_cost') > 0:
-                        furniture_cost = furniture_item.get('furniture_cost', 0)
-                        if furniture_type in ['cabinet_sideboard', 'cabinet_furniture']:
-                            percent = self.prices['assembly'].get('cabinet_sideboard_percent', 7)
-                            assembly_cost = int(furniture_cost * percent / 100)
-                            total += assembly_cost
-                            furniture_type_name = 'шкафа-серванта' if furniture_type == 'cabinet_sideboard' else 'корпусной мебели'
-                            details.append(f"Сборка {furniture_type_name} (7% от стоимости): {format_currency(assembly_cost)} руб")
         
         # 5. Пронос от парковки - используем количество проносов, указанное пользователем
         if not is_storage_only:
@@ -1408,15 +1398,15 @@ async def ask_carrying(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             InlineKeyboardButton("✅ Да", callback_data="carrying_yes"),
             InlineKeyboardButton("❌ Нет", callback_data="carrying_no")
         ],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_address")]
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_extra_point")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     if address == 'moscow':
         text = "🚚 <b>Есть ли пронос мебели до подъезда через паркинг или двор?</b>"
     else:  # МО
         text = "🚚 <b>Возможна ли доставка до двери?</b>\n\n(Подъезд к двери подъезда/квартиры)"
-    
+
     if update.callback_query:
         await update.callback_query.answer()
         try:
@@ -1425,7 +1415,7 @@ async def ask_carrying(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
     else:
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
-    
+
     return CARRYING_QUESTION
 
 
@@ -2046,13 +2036,15 @@ async def lifting_elevator_count_handler(update: Update, context: ContextTypes.D
             await update.message.reply_text(f"❌ Количество мест по лифту должно быть меньше общего количества мест ({places_count}). Введите число:")
             return LIFTING_ELEVATOR_COUNT
         
-        current_furniture['elevator_places'] = elevator_count
-        context.user_data['current_furniture'] = current_furniture
-        
         stairs_count = places_count - elevator_count
-        await update.message.reply_text(f"✅ По лифту: {elevator_count} мест\nОсталось по лестнице: {stairs_count} мест")
-        
-        return await ask_lifting_stairs_count(update, context)
+        current_furniture['elevator_places'] = elevator_count
+        current_furniture['stairs_places'] = stairs_count
+        current_furniture['elevator'] = False  # Смешанный способ
+        context.user_data['current_furniture'] = current_furniture
+
+        await update.message.reply_text(f"✅ По лифту: {elevator_count} мест, по лестнице: {stairs_count} мест")
+
+        return await ask_assembly(update, context)
     except ValueError:
         await update.message.reply_text("❌ Пожалуйста, введите число:")
         return LIFTING_ELEVATOR_COUNT
@@ -2449,26 +2441,46 @@ async def places_input_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def ask_assembly(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Запрос о необходимости сборки (или автоматическая сборка)"""
+    """Запрос о необходимости сборки (или пропуск для мебели без сборки)"""
     current_furniture = context.user_data.get('current_furniture', {})
     furniture_type = current_furniture.get('furniture_type')
-    
-    # Проверяем, всегда ли разобран этот тип мебели (актуальные данные из Google Docs)
-    try:
-        calculator = DeliveryCalculator()
-    except Exception as e:
-        logger.error(f"Ошибка при загрузке прайса в ask_assembly: {e}")
-        # Пробуем использовать локальный файл как fallback
-        try:
-            with open("prices.json", 'r', encoding='utf-8') as f:
-                prices = json.load(f)
-            calculator = type('Calculator', (), {'prices': prices})()  # Создаём объект с prices
-        except Exception as fallback_error:
-            logger.error(f"Не удалось загрузить даже fallback файл: {fallback_error}")
-            # Если и fallback не сработал, продолжаем без автоматической сборки
-            calculator = type('Calculator', (), {'prices': {}})()
-    
-    # Всегда спрашиваем про сборку (не автоматически)
+
+    # Типы мебели, для которых доступна сборка
+    assembly_available_types = {
+        'sofa_non_disassembled_up_to_2m', 'sofa_non_disassembled_up_to_3m',
+        'sofa_corner', 'sofa_disassembled_1_seat',
+        'bed_disassembled_1_seat', 'bed_non_disassembled',
+        'shelf_up_to_1m', 'shelf_up_to_2m',
+        'chest_tv_stand_up_to_60kg', 'chest_tv_stand_up_to_90kg',
+        'chest_tv_stand_up_to_120kg', 'chest_tv_stand_up_to_150kg',
+        'desk_console', 'dining_table',
+        'dining_table_marble_up_to_60kg', 'dining_table_marble_up_to_90kg',
+        'dining_table_marble_up_to_120kg', 'dining_table_marble_up_to_150kg',
+        'dining_table_marble_up_to_200kg',
+        'armchair', 'chair_semi_armchair_pouf_coffee_table',
+        'ottoman_bedside_table_bench',
+        'mirror_picture_up_to_1m', 'mirror_picture_over_1m'
+    }
+
+    # Если для этого типа мебели нет сборки, пропускаем вопрос
+    if furniture_type not in assembly_available_types:
+        current_furniture['assembly_needed'] = False
+        context.user_data['current_furniture'] = current_furniture
+
+        # Добавляем мебель в список и переходим дальше
+        calculation_data = get_calculation_data(context)
+        if 'furniture_list' not in calculation_data:
+            calculation_data['furniture_list'] = []
+        calculation_data['furniture_list'].append(current_furniture.copy())
+        context.user_data['current_furniture'] = {}
+
+        if update.callback_query:
+            await update.callback_query.message.reply_text("✅ Мебель добавлена (сборка не предусмотрена для данного типа)")
+        else:
+            await update.message.reply_text("✅ Мебель добавлена (сборка не предусмотрена для данного типа)")
+
+        return await ask_add_more_furniture(update, context)
+
     keyboard = [
         [
             InlineKeyboardButton("Да", callback_data="assembly_yes"),
@@ -2476,13 +2488,13 @@ async def ask_assembly(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     text = "🔧 Нужна ли сборка мебели?"
     if update.callback_query:
         await update.callback_query.message.reply_text(text, reply_markup=reply_markup)
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
-    
+
     return ASSEMBLY_NEEDED
 
 
@@ -3099,6 +3111,14 @@ async def back_to_address_callback(update: Update, context: ContextTypes.DEFAULT
     return await ask_address(update, context)
 
 
+async def back_to_extra_point_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Обработка кнопки 'Назад' - возврат к вопросу о доп. точках доставки"""
+    # Очищаем маршруты чтобы пользователь мог заново их добавить
+    calculation_data = get_calculation_data(context)
+    calculation_data['extra_routes'] = []
+    return await ask_extra_point(update, context)
+
+
 async def back_to_carrying_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обработка кнопки 'Назад' - возврат к вопросу про пронос"""
     return await ask_carrying(update, context)
@@ -3167,7 +3187,7 @@ def main():
             ],
             CARRYING_QUESTION: [
                 CallbackQueryHandler(carrying_callback, pattern="^carrying_"),
-                CallbackQueryHandler(back_to_address_callback, pattern="^back_to_address$")
+                CallbackQueryHandler(back_to_extra_point_callback, pattern="^back_to_extra_point$")
             ],
             DOOR_DISTANCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, door_distance_handler)],
             CARRYING_TIMES: [MessageHandler(filters.TEXT & ~filters.COMMAND, carrying_times_handler)],
@@ -3188,7 +3208,6 @@ def main():
                 CallbackQueryHandler(lifting_method_callback, pattern="^lifting_method_")
             ],
             LIFTING_ELEVATOR_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, lifting_elevator_count_handler)],
-            LIFTING_STAIRS_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, lifting_stairs_count_handler)],
             FURNITURE_TYPE: [
                 CallbackQueryHandler(furniture_type_callback, pattern="^furniture_"),
                 CallbackQueryHandler(back_to_delivery_only_callback, pattern="^back_to_delivery_only$"),
