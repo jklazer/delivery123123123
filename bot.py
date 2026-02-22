@@ -2054,52 +2054,6 @@ async def lifting_elevator_count_handler(update: Update, context: ContextTypes.D
         return ConversationHandler.END
 
 
-async def ask_lifting_stairs_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Запрос количества мест по лестнице"""
-    current_furniture = context.user_data.get('current_furniture', {})
-    places_count = current_furniture.get('places_count', 1)
-    elevator_count = current_furniture.get('elevator_places', 0)
-    stairs_count = places_count - elevator_count
-    
-    text = f"🪜 <b>Сколько мест поднимать по лестнице?</b>\n\nОсталось мест: {stairs_count}\nВведите число:"
-    
-    if update.callback_query:
-        await update.callback_query.message.reply_text(text, parse_mode='HTML')
-    else:
-        await update.message.reply_text(text, parse_mode='HTML')
-    
-    return LIFTING_STAIRS_COUNT
-
-
-async def lifting_stairs_count_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обработка ввода количества мест по лестнице"""
-    try:
-        current_furniture = context.user_data.get('current_furniture', {})
-        places_count = current_furniture.get('places_count', 1)
-        elevator_count = current_furniture.get('elevator_places', 0)
-        expected_stairs = places_count - elevator_count
-        
-        stairs_count = int(update.message.text)
-        
-        if stairs_count != expected_stairs:
-            await update.message.reply_text(f"❌ Количество мест по лестнице должно быть {expected_stairs}. Введите число:")
-            return LIFTING_STAIRS_COUNT
-        
-        current_furniture['stairs_places'] = stairs_count
-        current_furniture['elevator'] = False  # Смешанный способ
-        context.user_data['current_furniture'] = current_furniture
-        
-        await update.message.reply_text(f"✅ По лестнице: {stairs_count} мест")
-        
-        return await ask_assembly(update, context)
-    except ValueError:
-        await update.message.reply_text("❌ Пожалуйста, введите число:")
-        return LIFTING_STAIRS_COUNT
-    except Exception as e:
-        logger.error(f"Ошибка в lifting_stairs_count_handler: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте снова или используйте /start")
-        return ConversationHandler.END
-
 
 async def elevator_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обработка выбора лифта (для МО)"""
